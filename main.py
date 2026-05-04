@@ -43,7 +43,7 @@ st.markdown("""
     <style>
     .stApp {
         background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)),
-                    url('https://images.pexels.com/photos/4551832/pexels-photo-4551832.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2');
+                    url('https://i.pinimg.com/736x/44/c4/ad/44c4adb579a07cdeb051882a05799a25.jpg');
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
