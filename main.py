@@ -10,7 +10,7 @@ DATA_FILE = "data.csv"
 STOCK_FILE = "stock.csv"
 
 st.set_page_config(page_title="Finance App", layout="wide")
-st.title("📊 Sistem Pemasukan & Pengeluaran + Stock")
+st.title("📊 Sistem Pemasukan, Pengeluaran & Stock")
 
 # =========================
 # INIT FILE
@@ -30,58 +30,6 @@ def init_file():
 
 # =========================
 # LOAD DATA
-def edit_data(no_edit, produk, harga, jumlah, jenis, pj):
-    df = load_data()
-    stock = load_stock()
-
-    # cari index berdasarkan nomor
-    idx = df[df["No"] == no_edit].index
-
-    if len(idx) == 0:
-        return False
-
-    idx = idx[0]
-
-    # === rollback stock lama ===
-    old_produk = df.at[idx, "Produk"]
-    old_jumlah = df.at[idx, "Jumlah"]
-    old_jenis = df.at[idx, "Jenis"]
-
-    if old_produk in stock["Produk"].values:
-        s_idx = stock[stock["Produk"] == old_produk].index[0]
-
-        if old_jenis == "masuk":
-            stock.at[s_idx, "Stock"] -= old_jumlah
-        else:
-            stock.at[s_idx, "Stock"] += old_jumlah
-
-    # === update data baru ===
-    total = harga * jumlah
-
-    df.at[idx, "Produk"] = produk
-    df.at[idx, "Harga"] = harga
-    df.at[idx, "Jumlah"] = jumlah
-    df.at[idx, "Total"] = total
-    df.at[idx, "Jenis"] = jenis
-    df.at[idx, "Penanggung Jawab"] = pj
-
-    # === update stock baru ===
-    if produk in stock["Produk"].values:
-        s_idx = stock[stock["Produk"] == produk].index[0]
-
-        if jenis == "masuk":
-            stock.at[s_idx, "Stock"] += jumlah
-        else:
-            stock.at[s_idx, "Stock"] -= jumlah
-    else:
-        new_stock = jumlah if jenis == "masuk" else -jumlah
-        stock.loc[len(stock)] = [produk, new_stock]
-
-    # simpan
-    df.to_csv(DATA_FILE, index=False)
-    stock.to_csv(STOCK_FILE, index=False)
-
-    return True
 # =========================
 def load_data():
     return pd.read_csv(DATA_FILE)
@@ -90,7 +38,7 @@ def load_stock():
     return pd.read_csv(STOCK_FILE)
 
 # =========================
-# UPDATE STOCK
+# UPDATE STOCK (NORMAL)
 # =========================
 def update_stock(produk, jumlah, jenis):
     stock = load_stock()
@@ -139,6 +87,60 @@ def tambah_data(produk, harga, jumlah, jenis, pj):
     update_stock(produk, jumlah, jenis)
 
 # =========================
+# EDIT DATA + FIX STOCK
+# =========================
+def edit_data(no_edit, produk, harga, jumlah, jenis, pj):
+    df = load_data()
+    stock = load_stock()
+
+    idx = df[df["No"] == no_edit].index
+
+    if len(idx) == 0:
+        return False
+
+    idx = idx[0]
+
+    # rollback stock lama
+    old_produk = df.at[idx, "Produk"]
+    old_jumlah = df.at[idx, "Jumlah"]
+    old_jenis = df.at[idx, "Jenis"]
+
+    if old_produk in stock["Produk"].values:
+        s_idx = stock[stock["Produk"] == old_produk].index[0]
+
+        if old_jenis == "masuk":
+            stock.at[s_idx, "Stock"] -= old_jumlah
+        else:
+            stock.at[s_idx, "Stock"] += old_jumlah
+
+    # update data baru
+    total = harga * jumlah
+
+    df.at[idx, "Produk"] = produk
+    df.at[idx, "Harga"] = harga
+    df.at[idx, "Jumlah"] = jumlah
+    df.at[idx, "Total"] = total
+    df.at[idx, "Jenis"] = jenis
+    df.at[idx, "Penanggung Jawab"] = pj
+
+    # update stock baru
+    if produk in stock["Produk"].values:
+        s_idx = stock[stock["Produk"] == produk].index[0]
+
+        if jenis == "masuk":
+            stock.at[s_idx, "Stock"] += jumlah
+        else:
+            stock.at[s_idx, "Stock"] -= jumlah
+    else:
+        new_stock = jumlah if jenis == "masuk" else -jumlah
+        stock.loc[len(stock)] = [produk, new_stock]
+
+    df.to_csv(DATA_FILE, index=False)
+    stock.to_csv(STOCK_FILE, index=False)
+
+    return True
+
+# =========================
 # INIT
 # =========================
 init_file()
@@ -149,6 +151,7 @@ init_file()
 menu = st.sidebar.selectbox("Menu", [
     "Input Transaksi",
     "Data Transaksi",
+    "Edit Data",
     "Stock Produk",
     "Rekap Bulanan"
 ])
@@ -171,7 +174,7 @@ if menu == "Input Transaksi":
 
     pj = st.text_input("Penanggung Jawab")
 
-    if st.button("Simpan Transaksi"):
+    if st.button("Simpan"):
         if produk == "" or pj == "":
             st.warning("Harap isi semua data!")
         else:
@@ -179,20 +182,53 @@ if menu == "Input Transaksi":
             st.success("✅ Data berhasil disimpan!")
 
 # =========================
-# DATA TRANSAKSI
+# DATA
 # =========================
 elif menu == "Data Transaksi":
     st.subheader("📋 Data Transaksi")
-
     df = load_data()
     st.dataframe(df, use_container_width=True)
+
+# =========================
+# EDIT DATA
+# =========================
+elif menu == "Edit Data":
+    st.subheader("✏️ Edit Data Transaksi")
+
+    df = load_data()
+
+    if len(df) == 0:
+        st.info("Belum ada data")
+    else:
+        st.dataframe(df, use_container_width=True)
+
+        no_edit = st.number_input("Masukkan No yang ingin diedit", min_value=1, step=1)
+
+        data_pilih = df[df["No"] == no_edit]
+
+        if not data_pilih.empty:
+            data_pilih = data_pilih.iloc[0]
+
+            produk = st.text_input("Nama Produk", value=data_pilih["Produk"])
+            harga = st.number_input("Harga", value=int(data_pilih["Harga"]))
+            jumlah = st.number_input("Jumlah", value=int(data_pilih["Jumlah"]))
+            jenis = st.selectbox("Jenis", ["masuk", "keluar"],
+                                 index=0 if data_pilih["Jenis"] == "masuk" else 1)
+            pj = st.text_input("Penanggung Jawab", value=data_pilih["Penanggung Jawab"])
+
+            if st.button("Update Data"):
+                if edit_data(no_edit, produk, harga, jumlah, jenis, pj):
+                    st.success("✅ Data berhasil diupdate!")
+                else:
+                    st.error("❌ Data tidak ditemukan")
+        else:
+            st.warning("Nomor tidak ditemukan")
 
 # =========================
 # STOCK
 # =========================
 elif menu == "Stock Produk":
     st.subheader("📦 Stock Produk")
-
     stock = load_stock()
     st.dataframe(stock, use_container_width=True)
 
@@ -222,3 +258,4 @@ elif menu == "Rekap Bulanan":
 
         st.subheader("📊 Grafik")
         st.bar_chart(summary[["masuk","keluar"]])
+        
