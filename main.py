@@ -1,159 +1,172 @@
-import csv
+import streamlit as st
+import pandas as pd
 import os
 from datetime import datetime
-from collections import defaultdict
 
+# =========================
+# CONFIG
+# =========================
 DATA_FILE = "data.csv"
 STOCK_FILE = "stock.csv"
+
+st.set_page_config(page_title="Finance App", layout="wide")
+st.title("📊 Sistem Pemasukan & Pengeluaran + Stock")
 
 # =========================
 # INIT FILE
 # =========================
-def init_files():
+def init_file():
     if not os.path.exists(DATA_FILE):
-        with open(DATA_FILE, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                "No", "Tanggal", "Jam", "Produk",
-                "Harga", "Jumlah", "Total",
-                "Jenis", "Penanggung Jawab"
-            ])
+        df = pd.DataFrame(columns=[
+            "No","Tanggal","Jam","Produk",
+            "Harga","Jumlah","Total",
+            "Jenis","Penanggung Jawab"
+        ])
+        df.to_csv(DATA_FILE, index=False)
 
     if not os.path.exists(STOCK_FILE):
-        with open(STOCK_FILE, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(["Produk", "Stock"])
+        df = pd.DataFrame(columns=["Produk","Stock"])
+        df.to_csv(STOCK_FILE, index=False)
 
 # =========================
-# STOCK MANAGEMENT
+# LOAD DATA
 # =========================
-def get_stock():
-    stock = {}
-    with open(STOCK_FILE, mode='r') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            stock[row["Produk"]] = int(row["Stock"])
-    return stock
+def load_data():
+    return pd.read_csv(DATA_FILE)
 
-def update_stock(product, quantity, jenis):
-    stock = get_stock()
-
-    if product not in stock:
-        stock[product] = 0
-
-    if jenis == "masuk":
-        stock[product] += quantity
-    elif jenis == "keluar":
-        stock[product] -= quantity
-
-    with open(STOCK_FILE, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(["Produk", "Stock"])
-        for p, s in stock.items():
-            writer.writerow([p, s])
+def load_stock():
+    return pd.read_csv(STOCK_FILE)
 
 # =========================
-# ADD TRANSACTION
+# UPDATE STOCK
 # =========================
-def add_transaction():
-    produk = input("Nama produk: ")
-    harga = int(input("Harga per item: "))
-    jumlah = int(input("Jumlah: "))
-    jenis = input("Jenis (masuk/keluar): ").lower()
-    penanggung = input("Nama penanggung jawab: ")
+def update_stock(produk, jumlah, jenis):
+    stock = load_stock()
 
-    total = harga * jumlah
+    if produk in stock["Produk"].values:
+        idx = stock[stock["Produk"] == produk].index[0]
+
+        if jenis == "masuk":
+            stock.at[idx, "Stock"] += jumlah
+        else:
+            stock.at[idx, "Stock"] -= jumlah
+    else:
+        new_stock = jumlah if jenis == "masuk" else -jumlah
+        stock.loc[len(stock)] = [produk, new_stock]
+
+    stock.to_csv(STOCK_FILE, index=False)
+
+# =========================
+# TAMBAH DATA
+# =========================
+def tambah_data(produk, harga, jumlah, jenis, pj):
+    df = load_data()
+
+    no = len(df) + 1
     now = datetime.now()
 
     tanggal = now.strftime("%Y-%m-%d")
     jam = now.strftime("%H:%M:%S")
+    total = harga * jumlah
 
-    # Hitung nomor
-    with open(DATA_FILE, mode='r') as file:
-        reader = list(csv.reader(file))
-        no = len(reader)
+    new_row = {
+        "No": no,
+        "Tanggal": tanggal,
+        "Jam": jam,
+        "Produk": produk,
+        "Harga": harga,
+        "Jumlah": jumlah,
+        "Total": total,
+        "Jenis": jenis,
+        "Penanggung Jawab": pj
+    }
 
-    # Simpan data
-    with open(DATA_FILE, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([
-            no, tanggal, jam, produk,
-            harga, jumlah, total,
-            jenis, penanggung
-        ])
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    df.to_csv(DATA_FILE, index=False)
 
-    # Update stok
     update_stock(produk, jumlah, jenis)
 
-    print("✅ Transaksi berhasil ditambahkan!")
+# =========================
+# INIT
+# =========================
+init_file()
 
 # =========================
-# SHOW DATA
+# SIDEBAR MENU
 # =========================
-def show_data():
-    with open(DATA_FILE, mode='r') as file:
-        reader = csv.reader(file)
-        for row in reader:
-            print(row)
+menu = st.sidebar.selectbox("Menu", [
+    "Input Transaksi",
+    "Data Transaksi",
+    "Stock Produk",
+    "Rekap Bulanan"
+])
+
+# =========================
+# INPUT TRANSAKSI
+# =========================
+if menu == "Input Transaksi":
+    st.subheader("➕ Tambah Transaksi")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        produk = st.text_input("Nama Produk")
+        harga = st.number_input("Harga per Item", min_value=0)
+
+    with col2:
+        jumlah = st.number_input("Jumlah", min_value=1)
+        jenis = st.selectbox("Jenis", ["masuk", "keluar"])
+
+    pj = st.text_input("Penanggung Jawab")
+
+    if st.button("Simpan Transaksi"):
+        if produk == "" or pj == "":
+            st.warning("Harap isi semua data!")
+        else:
+            tambah_data(produk, harga, jumlah, jenis, pj)
+            st.success("✅ Data berhasil disimpan!")
+
+# =========================
+# DATA TRANSAKSI
+# =========================
+elif menu == "Data Transaksi":
+    st.subheader("📋 Data Transaksi")
+
+    df = load_data()
+    st.dataframe(df, use_container_width=True)
+
+# =========================
+# STOCK
+# =========================
+elif menu == "Stock Produk":
+    st.subheader("📦 Stock Produk")
+
+    stock = load_stock()
+    st.dataframe(stock, use_container_width=True)
 
 # =========================
 # REKAP BULANAN
 # =========================
-def monthly_report():
-    laporan = defaultdict(int)
+elif menu == "Rekap Bulanan":
+    st.subheader("📈 Rekap Bulanan")
 
-    with open(DATA_FILE, mode='r') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            bulan = row["Tanggal"][:7]  # YYYY-MM
-            total = int(row["Total"])
+    df = load_data()
 
-            if row["Jenis"] == "masuk":
-                laporan[bulan] += total
-            else:
-                laporan[bulan] -= total
+    if len(df) == 0:
+        st.info("Belum ada data")
+    else:
+        df["Bulan"] = df["Tanggal"].astype(str).str[:7]
 
-    print("\n📊 Rekap Bulanan:")
-    for bulan, total in laporan.items():
-        print(f"{bulan} : Rp {total}")
+        summary = df.groupby(["Bulan","Jenis"])["Total"].sum().unstack().fillna(0)
 
-# =========================
-# SHOW STOCK
-# =========================
-def show_stock():
-    print("\n📦 Stock Produk:")
-    stock = get_stock()
-    for produk, jumlah in stock.items():
-        print(f"{produk} : {jumlah}")
+        if "masuk" not in summary:
+            summary["masuk"] = 0
+        if "keluar" not in summary:
+            summary["keluar"] = 0
 
-# =========================
-# MAIN MENU
-# =========================
-def main():
-    init_files()
+        summary["Saldo"] = summary["masuk"] - summary["keluar"]
 
-    while True:
-        print("\n=== MENU ===")
-        print("1. Tambah Transaksi")
-        print("2. Lihat Data")
-        print("3. Rekap Bulanan")
-        print("4. Lihat Stock")
-        print("5. Keluar")
+        st.dataframe(summary, use_container_width=True)
 
-        pilihan = input("Pilih menu: ")
-
-        if pilihan == "1":
-            add_transaction()
-        elif pilihan == "2":
-            show_data()
-        elif pilihan == "3":
-            monthly_report()
-        elif pilihan == "4":
-            show_stock()
-        elif pilihan == "5":
-            break
-        else:
-            print("❌ Pilihan tidak valid")
-
-if __name__ == "__main__":
-    main()
+        st.subheader("📊 Grafik")
+        st.bar_chart(summary[["masuk","keluar"]])
