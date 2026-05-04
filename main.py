@@ -30,6 +30,58 @@ def init_file():
 
 # =========================
 # LOAD DATA
+def edit_data(no_edit, produk, harga, jumlah, jenis, pj):
+    df = load_data()
+    stock = load_stock()
+
+    # cari index berdasarkan nomor
+    idx = df[df["No"] == no_edit].index
+
+    if len(idx) == 0:
+        return False
+
+    idx = idx[0]
+
+    # === rollback stock lama ===
+    old_produk = df.at[idx, "Produk"]
+    old_jumlah = df.at[idx, "Jumlah"]
+    old_jenis = df.at[idx, "Jenis"]
+
+    if old_produk in stock["Produk"].values:
+        s_idx = stock[stock["Produk"] == old_produk].index[0]
+
+        if old_jenis == "masuk":
+            stock.at[s_idx, "Stock"] -= old_jumlah
+        else:
+            stock.at[s_idx, "Stock"] += old_jumlah
+
+    # === update data baru ===
+    total = harga * jumlah
+
+    df.at[idx, "Produk"] = produk
+    df.at[idx, "Harga"] = harga
+    df.at[idx, "Jumlah"] = jumlah
+    df.at[idx, "Total"] = total
+    df.at[idx, "Jenis"] = jenis
+    df.at[idx, "Penanggung Jawab"] = pj
+
+    # === update stock baru ===
+    if produk in stock["Produk"].values:
+        s_idx = stock[stock["Produk"] == produk].index[0]
+
+        if jenis == "masuk":
+            stock.at[s_idx, "Stock"] += jumlah
+        else:
+            stock.at[s_idx, "Stock"] -= jumlah
+    else:
+        new_stock = jumlah if jenis == "masuk" else -jumlah
+        stock.loc[len(stock)] = [produk, new_stock]
+
+    # simpan
+    df.to_csv(DATA_FILE, index=False)
+    stock.to_csv(STOCK_FILE, index=False)
+
+    return True
 # =========================
 def load_data():
     return pd.read_csv(DATA_FILE)
